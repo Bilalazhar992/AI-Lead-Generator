@@ -20,6 +20,11 @@ class SubscriptionQueries:
         return await SubscriptionQueries._plans_col().find_one({"slug": slug, "is_active": True})
 
     @staticmethod
+    async def find_plan_by_slug_any(slug: str) -> dict | None:
+        """Find plan by slug regardless of is_active status (for uniqueness check)."""
+        return await SubscriptionQueries._plans_col().find_one({"slug": slug})
+
+    @staticmethod
     async def find_plan_by_id(plan_id: ObjectId) -> dict | None:
         return await SubscriptionQueries._plans_col().find_one({"_id": plan_id})
 
@@ -27,6 +32,28 @@ class SubscriptionQueries:
     async def find_all_active_plans() -> list:
         cursor = SubscriptionQueries._plans_col().find({"is_active": True}).sort("display_order", 1)
         return await cursor.to_list(length=None)
+
+    @staticmethod
+    async def create_plan(data: dict) -> dict:
+        result = await SubscriptionQueries._plans_col().insert_one(data)
+        return await SubscriptionQueries._plans_col().find_one({"_id": result.inserted_id})
+
+    @staticmethod
+    async def update_plan(plan_id: ObjectId, data: dict) -> dict | None:
+        result = await SubscriptionQueries._plans_col().update_one(
+            {"_id": plan_id}, {"$set": data}
+        )
+        if result.matched_count == 0:
+            return None
+        return await SubscriptionQueries._plans_col().find_one({"_id": plan_id})
+
+    @staticmethod
+    async def deactivate_plan(plan_id: ObjectId) -> bool:
+        """Soft-delete: sets is_active to False. Returns True if a doc was updated."""
+        result = await SubscriptionQueries._plans_col().update_one(
+            {"_id": plan_id}, {"$set": {"is_active": False}}
+        )
+        return result.modified_count > 0
 
     # ── Subscriptions ──────────────────────────────────────────────────
 
