@@ -47,3 +47,10 @@ class UserQueries:
             {"$set": data},
         )
 
+    @staticmethod
+    async def count_staff_by_business(business_id: ObjectId) -> int:
+        """Count business_staff members linked to a business (via user_details)."""
+        return await UserQueries._details_col().count_documents(
+            {"business_id": business_id}
+        )
+

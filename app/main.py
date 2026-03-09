@@ -5,6 +5,9 @@ from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection
 from app.routes.auth_routes import router as auth_router
 from app.routes.business_routes import router as business_router
+from app.routes.platform_staff_routes import router as platform_staff_router
+from app.routes.business_staff_routes import router as business_staff_router
+from app.routes.subscription_plan_routes import router as subscription_plan_router
 
 
 @asynccontextmanager
@@ -33,6 +36,9 @@ app.add_middleware(
 # ── Routers ──────────────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(business_router)
+app.include_router(platform_staff_router)
+app.include_router(business_staff_router)
+app.include_router(subscription_plan_router)
 
 
 # ── Health ───────────────────────────────────────────────

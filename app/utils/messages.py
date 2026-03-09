@@ -31,3 +31,18 @@ class MESSAGES:
     BUSINESS_NOT_FOUND = 'Business profile not found'
     BUSINESS_UPDATED = 'Business profile updated successfully'
 
+    # Staff
+    STAFF_INVITED = 'Staff member invited successfully'
+    STAFF_EMAIL_EXISTS = 'An account with this email already exists'
+    INVALID_PERMISSIONS = 'One or more permissions are not valid for this role'
+    INVALID_DEPARTMENT = 'Invalid department value'
+    BUSINESS_REQUIRED = 'You must complete business onboarding before inviting staff'
+    TEAM_LIMIT_REACHED = 'Your subscription plan team member limit has been reached'
+
+    # Subscription Plans
+    PLAN_CREATED = 'Subscription plan created successfully'
+    PLAN_UPDATED = 'Subscription plan updated successfully'
+    PLAN_DEACTIVATED = 'Subscription plan deactivated successfully'
+    PLAN_NOT_FOUND = 'Subscription plan not found'
+    PLAN_SLUG_EXISTS = 'A subscription plan with this slug already exists'
+

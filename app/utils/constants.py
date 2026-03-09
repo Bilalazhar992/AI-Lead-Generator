@@ -116,12 +116,21 @@ class PERMISSIONS:
     MANAGE_BUSINESSES = "manage_businesses"
 
 
+class DEPARTMENTS:
+    """Platform staff department identifiers"""
+    SUPPORT = "support"
+    BILLING = "billing"
+    TECHNICAL = "technical"
+
+    ALL = ["support", "billing", "technical"]
+
+
 # Default permissions assigned to each role on account creation
 ROLE_DEFAULT_PERMISSIONS: dict = {
     ROLES.SUPER_ADMIN: [
         PERMISSIONS.MANAGE_SUBSCRIPTIONS,
         PERMISSIONS.MANAGE_AI_TEMPLATES,
-        PERMISSIONS.VIEW_BUSINESSES,
+        PERMISSIONS.MANAGE_BUSINESSES,
         PERMISSIONS.MANAGE_PLATFORM_USERS,
         PERMISSIONS.VIEW_ANALYTICS,
     ],
@@ -135,4 +144,23 @@ ROLE_DEFAULT_PERMISSIONS: dict = {
     ROLES.BUSINESS_STAFF: [],
     ROLES.PLATFORM_STAFF: [],
 }
+
+
+# Permissions that super_admin can assign to platform_staff at invite time
+PLATFORM_STAFF_ASSIGNABLE_PERMISSIONS = [
+    PERMISSIONS.MANAGE_SUBSCRIPTIONS,
+    PERMISSIONS.MANAGE_AI_TEMPLATES,
+    PERMISSIONS.MANAGE_BUSINESSES,
+    PERMISSIONS.MANAGE_PLATFORM_USERS,
+    PERMISSIONS.VIEW_ANALYTICS,
+]
+
+# Permissions that business_owner can assign to business_staff at invite time
+BUSINESS_STAFF_ASSIGNABLE_PERMISSIONS = [
+    PERMISSIONS.MANAGE_PRODUCTS,
+    PERMISSIONS.MANAGE_LEADS,
+    PERMISSIONS.MANAGE_TEAM,
+    PERMISSIONS.MANAGE_BILLING,
+    PERMISSIONS.VIEW_ANALYTICS,
+]
 
