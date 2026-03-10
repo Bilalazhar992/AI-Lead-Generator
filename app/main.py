@@ -8,6 +8,7 @@ from app.routes.business_routes import router as business_router
 from app.routes.platform_staff_routes import router as platform_staff_router
 from app.routes.business_staff_routes import router as business_staff_router
 from app.routes.subscription_plan_routes import router as subscription_plan_router
+from app.routes.product_routes import router as product_router
 
 
 @asynccontextmanager
@@ -39,6 +40,7 @@ app.include_router(business_router)
 app.include_router(platform_staff_router)
 app.include_router(business_staff_router)
 app.include_router(subscription_plan_router)
+app.include_router(product_router)
 
 
 # ── Health ───────────────────────────────────────────────

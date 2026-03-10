@@ -48,6 +48,11 @@ async def _ensure_indexes() -> None:
     await _db["subscriptions"].create_index("business_id", unique=True)
     await _db["subscription_plans"].create_index("slug", unique=True)
 
+    # ── Business-scoped: products ─────────────────────────────────────
+    await _db["products"].create_index(
+        [("business_id", 1), ("slug", 1)], unique=True
+    )
+
 
 async def _seed_subscription_plans() -> None:
     """Insert the default plan catalog once if no plans exist yet."""

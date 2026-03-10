@@ -80,6 +80,15 @@ class PASSWORD:
     REGEX = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$'
 
 
+class PRODUCT_STATUS:
+    """Product lifecycle statuses"""
+    DRAFT = "draft"
+    ACTIVE = "active"
+    PAUSED = "paused"
+
+    ALL = ["draft", "active", "paused"]
+
+
 class BUSINESS_STATUS:
     """Business account statuses"""
     ACTIVE = "active"
