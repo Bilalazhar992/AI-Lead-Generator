@@ -1,14 +1,12 @@
 """Business logic for platform staff invitation (super_admin only)."""
 
 from datetime import datetime, timezone
-from passlib.context import CryptContext
 from app.queries.user_queries import UserQueries
+from app.utils.password_helper import hash_password
 from app.utils.response_service import ResponseService
 from app.utils.constants import CODE, STATUS, ROLES
 from app.utils.messages import MESSAGES
 from app.models.staff_schemas import InvitePlatformStaffRequest
-
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _serialize_staff(user: dict) -> dict:
@@ -47,7 +45,7 @@ class PlatformStaffImplementation:
             # ── Create user document ─────────────────────────────────
             user = await UserQueries.create_user({
                 "email": data.email,
-                "password_hash": _pwd_context.hash(data.password),
+                "password_hash": hash_password(data.password),
                 "first_name": data.first_name,
                 "last_name": data.last_name,
                 "role": ROLES.PLATFORM_STAFF,

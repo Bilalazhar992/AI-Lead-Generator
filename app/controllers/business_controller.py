@@ -30,3 +30,17 @@ class BusinessController:
         except Exception as error:
             ResponseService.status = CODE.INTERNAL_SERVER_ERROR
             return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)
+
+    async def get_all_businesses(self, current_user: dict) -> dict:
+        try:
+            return await _impl.get_all_businesses(current_user)
+        except Exception as error:
+            ResponseService.status = CODE.INTERNAL_SERVER_ERROR
+            return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)
+
+    async def get_staff_business(self, staff_user_id: str) -> dict:
+        try:
+            return await _impl.get_staff_business(staff_user_id)
+        except Exception as error:
+            ResponseService.status = CODE.INTERNAL_SERVER_ERROR
+            return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)

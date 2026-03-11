@@ -54,3 +54,8 @@ class UserQueries:
             {"business_id": business_id}
         )
 
+    @staticmethod
+    async def find_user_details(user_id: ObjectId) -> dict | None:
+        """Get user_details document by user_id."""
+        return await UserQueries._details_col().find_one({"user_id": user_id})
+

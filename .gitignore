@@ -36,4 +36,5 @@ coverage.xml
 
 # OS generated files
 .DS_Store
-Thumbs.dbimplementation_plan.md.resolved 
+Thumbs.db
+implementation_plan.md.resolved 

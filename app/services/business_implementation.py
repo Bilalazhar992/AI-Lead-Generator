@@ -6,7 +6,7 @@ from app.queries.subscription_queries import SubscriptionQueries
 from app.queries.user_queries import UserQueries
 from app.utils.slug_helper import generate_slug, make_unique_slug
 from app.utils.response_service import ResponseService
-from app.utils.constants import CODE, STATUS
+from app.utils.constants import CODE, STATUS, ROLES, PERMISSIONS
 from app.utils.messages import MESSAGES
 from app.models.business_schemas import BusinessOnboardRequest, BusinessUpdateRequest
 
@@ -150,6 +150,55 @@ class BusinessImplementation:
                 MESSAGES.SUCCESS,
             )
 
+        except Exception as error:
+            ResponseService.status = CODE.INTERNAL_SERVER_ERROR
+            return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)
+
+    async def get_all_businesses(self, current_user: dict) -> dict:
+        try:
+            # Platform staff must carry the MANAGE_BUSINESSES permission;
+            # super_admin is granted implicit access.
+            if current_user.get("role") == ROLES.PLATFORM_STAFF:
+                if PERMISSIONS.MANAGE_BUSINESSES not in current_user.get("permissions", []):
+                    ResponseService.status = CODE.FORBIDDEN
+                    return ResponseService.response_service(STATUS.FORBIDDEN, None, MESSAGES.PERMISSION_DENIED)
+
+            businesses = await BusinessQueries.find_all()
+            ResponseService.status = CODE.OK
+            return ResponseService.response_service(
+                STATUS.SUCCESS,
+                {"businesses": [_serialize_business(b) for b in businesses], "total": len(businesses)},
+                MESSAGES.SUCCESS,
+            )
+        except Exception as error:
+            ResponseService.status = CODE.INTERNAL_SERVER_ERROR
+            return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)
+
+    async def get_staff_business(self, staff_user_id: str) -> dict:
+        """Return the business a business_staff member belongs to via user_details.business_id."""
+        try:
+            staff_oid = ObjectId(staff_user_id)
+            user_details = await UserQueries.find_user_details(staff_oid)
+
+            if not user_details or not user_details.get("business_id"):
+                ResponseService.status = CODE.RECORD_NOT_FOUND
+                return ResponseService.response_service(STATUS.NOT_FOUND, None, MESSAGES.BUSINESS_NOT_FOUND)
+
+            business = await BusinessQueries.find_by_id(user_details["business_id"])
+            if not business:
+                ResponseService.status = CODE.RECORD_NOT_FOUND
+                return ResponseService.response_service(STATUS.NOT_FOUND, None, MESSAGES.BUSINESS_NOT_FOUND)
+
+            subscription = await SubscriptionQueries.find_active_by_business(business["_id"])
+            ResponseService.status = CODE.OK
+            return ResponseService.response_service(
+                STATUS.SUCCESS,
+                {
+                    "business": _serialize_business(business),
+                    "subscription": _serialize_subscription(subscription) if subscription else None,
+                },
+                MESSAGES.SUCCESS,
+            )
         except Exception as error:
             ResponseService.status = CODE.INTERNAL_SERVER_ERROR
             return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)
