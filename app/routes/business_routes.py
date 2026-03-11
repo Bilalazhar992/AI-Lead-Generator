@@ -41,3 +41,23 @@ async def update_my_business(
 ):
     """Update business profile details."""
     return await _controller.update_my_business(data, current_user["sub"])
+
+
+@router.get("/all")
+async def get_all_businesses(
+    current_user: dict = Depends(require_role(ROLES.SUPER_ADMIN, ROLES.PLATFORM_STAFF)),
+):
+    """
+    List all businesses.
+    - super_admin: full access.
+    - platform_staff: requires MANAGE_BUSINESSES permission (enforced in service layer).
+    """
+    return await _controller.get_all_businesses(current_user)
+
+
+@router.get("/my-business")
+async def get_staff_business(
+    current_user: dict = Depends(require_role(ROLES.BUSINESS_STAFF)),
+):
+    """Get the business the signed-in staff member belongs to."""
+    return await _controller.get_staff_business(current_user["sub"])

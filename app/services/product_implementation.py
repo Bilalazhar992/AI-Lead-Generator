@@ -1,164 +1,227 @@
+"""Business logic for product CRUD (business-scoped).
+
+Each product is an independent AI agent deployment. Products are
+scoped to a business via business_id. The service enforces:
+  - max_products limit from the subscription plan
+  - auto-generated slugs with uniqueness retry
+  - tenant-isolated reads/writes
+"""
+
 from datetime import datetime, timezone
 from bson import ObjectId
 from app.queries.product_queries import ProductQueries
-from app.utils.slug_helper import generate_slug, make_unique_slug
+from app.queries.agent_config_queries import AgentConfigQueries
+from app.queries.qualification_queries import QualificationQueries
 from app.utils.response_service import ResponseService
-from app.utils.constants import CODE, STATUS, PRODUCT_STATUS
+from app.utils.constants import CODE, STATUS
 from app.utils.messages import MESSAGES
+from app.utils.slug_helper import generate_slug, make_unique_slug
 from app.models.product_schemas import CreateProductRequest, UpdateProductRequest
 
 
 def _serialize_product(p: dict) -> dict:
+    """Convert a MongoDB product document to a JSON-safe dict."""
     return {
         "id": str(p["_id"]),
         "business_id": str(p["business_id"]),
-        "slug": p["slug"],
         "name": p["name"],
-        "description": p.get("description"),
+        "slug": p["slug"],
+        "description": p.get("description", ""),
         "website_url": p.get("website_url"),
-        "status": p["status"],
-        "created_by": str(p["created_by"]) if p.get("created_by") else None,
-        "created_at": p["created_at"].isoformat(),
-        "updated_at": p["updated_at"].isoformat(),
+        "is_active": p.get("is_active", True),
+        "created_at": p["created_at"].isoformat() if p.get("created_at") else None,
+        "updated_at": p["updated_at"].isoformat() if p.get("updated_at") else None,
     }
 
 
 class ProductImplementation:
-    """Business logic for product CRUD with tenant isolation and plan limit enforcement."""
+    """CRUD operations for business-scoped products."""
 
-    async def create_product(self, data: CreateProductRequest, ctx: dict) -> dict:
+    async def create_product(
+        self, data: CreateProductRequest, business_context: dict
+    ) -> dict:
+        """
+        Create a product under the current business.
+        - Enforces max_products from subscription plan.
+        - Auto-generates a unique slug from the product name.
+        """
         try:
-            business_id = ctx["business_id"]
-            business_slug = ctx["business_slug"]
-            plan = ctx.get("plan")
-            user_id = ctx["current_user"]["sub"]
+            biz_id = business_context["business_id"]
+            biz_slug = business_context["business_slug"]
+            subscription = business_context.get("subscription")
 
-            # Enforce max_products from subscription plan
-            if plan:
-                current_count = await ProductQueries.count_by_business(business_id)
-                if current_count >= plan.get("max_products", 0):
-                    ResponseService.status = CODE.FORBIDDEN
-                    return ResponseService.response_service(STATUS.FORBIDDEN, None, MESSAGES.PRODUCT_LIMIT_REACHED)
+            # ── Check product limit from subscription plan ───────────
+            if subscription:
+                from app.queries.subscription_queries import SubscriptionQueries
+                plan = await SubscriptionQueries.find_plan_by_id(
+                    subscription.get("plan_id")
+                )
+                if plan:
+                    max_products = plan.get("max_products", 1)
+                    current_count = await ProductQueries.count_by_business(biz_id)
+                    if current_count >= max_products:
+                        ResponseService.status = CODE.FORBIDDEN
+                        return ResponseService.response_service(
+                            STATUS.FAILURE, None, MESSAGES.PRODUCT_LIMIT_REACHED
+                        )
 
-            # Generate unique slug scoped to this business
+            # ── Generate unique slug ─────────────────────────────────
             base_slug = generate_slug(data.name)
             slug = base_slug
-            while await ProductQueries.slug_exists(business_id, slug):
+            # If slug collision within this business, append random suffix
+            if await ProductQueries.find_by_slug(slug, biz_id):
                 slug = make_unique_slug(base_slug)
 
             now = datetime.now(timezone.utc)
             product = await ProductQueries.create({
-                "business_id": business_id,
-                "business_slug": business_slug,
-                "slug": slug,
+                "business_id": biz_id,
+                "business_slug": biz_slug,
                 "name": data.name,
-                "description": data.description,
+                "slug": slug,
+                "description": data.description or "",
                 "website_url": data.website_url,
-                "status": PRODUCT_STATUS.DRAFT,
-                "created_by": ObjectId(user_id),
+                "is_active": data.is_active,
                 "created_at": now,
                 "updated_at": now,
             })
 
             ResponseService.status = CODE.CREATED
-            return ResponseService.response_service(STATUS.SUCCESS, _serialize_product(product), MESSAGES.PRODUCT_CREATED)
-
-        except Exception as error:
-            ResponseService.status = CODE.INTERNAL_SERVER_ERROR
-            return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)
-
-    async def get_all_products(self, ctx: dict) -> dict:
-        try:
-            business_id = ctx["business_id"]
-            products = await ProductQueries.find_all_by_business(business_id)
-
-            ResponseService.status = CODE.OK
             return ResponseService.response_service(
                 STATUS.SUCCESS,
-                [_serialize_product(p) for p in products],
-                MESSAGES.PRODUCTS_FETCHED,
+                {"product": _serialize_product(product)},
+                MESSAGES.PRODUCT_CREATED,
             )
 
         except Exception as error:
             ResponseService.status = CODE.INTERNAL_SERVER_ERROR
-            return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)
+            return ResponseService.response_service(
+                STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION
+            )
 
-    async def get_product(self, product_id: str, ctx: dict) -> dict:
+    async def list_products(self, business_context: dict) -> dict:
+        """List all products for the current business."""
         try:
-            business_id = ctx["business_id"]
-            product = await ProductQueries.find_by_id(business_id, ObjectId(product_id))
-
-            if not product:
-                ResponseService.status = CODE.RECORD_NOT_FOUND
-                return ResponseService.response_service(STATUS.NOT_FOUND, None, MESSAGES.PRODUCT_NOT_FOUND)
+            biz_id = business_context["business_id"]
+            products = await ProductQueries.find_all_by_business(biz_id)
 
             ResponseService.status = CODE.OK
-            return ResponseService.response_service(STATUS.SUCCESS, _serialize_product(product), MESSAGES.PRODUCT_FETCHED)
+            return ResponseService.response_service(
+                STATUS.SUCCESS,
+                {"products": [_serialize_product(p) for p in products]},
+                MESSAGES.SUCCESS,
+            )
 
         except Exception as error:
             ResponseService.status = CODE.INTERNAL_SERVER_ERROR
-            return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)
+            return ResponseService.response_service(
+                STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION
+            )
 
-    async def update_product(self, product_id: str, data: UpdateProductRequest, ctx: dict) -> dict:
+    async def get_product(self, product_id: str, business_context: dict) -> dict:
+        """Get a single product by ID (tenant-isolated)."""
         try:
-            business_id = ctx["business_id"]
-            product = await ProductQueries.find_by_id(business_id, ObjectId(product_id))
-
+            biz_id = business_context["business_id"]
+            product = await ProductQueries.find_by_id(ObjectId(product_id), biz_id)
             if not product:
                 ResponseService.status = CODE.RECORD_NOT_FOUND
-                return ResponseService.response_service(STATUS.NOT_FOUND, None, MESSAGES.PRODUCT_NOT_FOUND)
-
-            update_data = {k: v for k, v in data.model_dump().items() if v is not None}
-            if not update_data:
-                ResponseService.status = CODE.BAD_REQUEST
-                return ResponseService.response_service(STATUS.BAD_REQUEST, None, MESSAGES.INVALID_PARAMETERS)
-
-            # Validate status value if provided
-            if "status" in update_data and update_data["status"] not in PRODUCT_STATUS.ALL:
-                ResponseService.status = CODE.BAD_REQUEST
                 return ResponseService.response_service(
-                    STATUS.BAD_REQUEST, None,
-                    f"Invalid status. Must be one of: {', '.join(PRODUCT_STATUS.ALL)}",
+                    STATUS.NOT_FOUND, None, MESSAGES.PRODUCT_NOT_FOUND
                 )
 
-            # If name changed, regenerate slug
+            ResponseService.status = CODE.OK
+            return ResponseService.response_service(
+                STATUS.SUCCESS,
+                {"product": _serialize_product(product)},
+                MESSAGES.SUCCESS,
+            )
+
+        except Exception as error:
+            ResponseService.status = CODE.INTERNAL_SERVER_ERROR
+            return ResponseService.response_service(
+                STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION
+            )
+
+    async def update_product(
+        self, product_id: str, data: UpdateProductRequest, business_context: dict
+    ) -> dict:
+        """Partial update — only non-null fields are written. Tenant-isolated."""
+        try:
+            biz_id = business_context["business_id"]
+            prod_oid = ObjectId(product_id)
+
+            existing = await ProductQueries.find_by_id(prod_oid, biz_id)
+            if not existing:
+                ResponseService.status = CODE.RECORD_NOT_FOUND
+                return ResponseService.response_service(
+                    STATUS.NOT_FOUND, None, MESSAGES.PRODUCT_NOT_FOUND
+                )
+
+            update_data = data.model_dump(exclude_none=True)
+            if not update_data:
+                ResponseService.status = CODE.BAD_REQUEST
+                return ResponseService.response_service(
+                    STATUS.FAILURE, None, MESSAGES.INVALID_PARAMETERS
+                )
+
+            # If name is changing, re-generate slug
             if "name" in update_data:
                 base_slug = generate_slug(update_data["name"])
                 slug = base_slug
-                existing = await ProductQueries.find_by_slug(business_id, slug)
-                if existing and existing["_id"] != product["_id"]:
-                    while await ProductQueries.slug_exists(business_id, slug):
+                if await ProductQueries.find_by_slug(slug, biz_id):
+                    # Only regenerate if it's a different product
+                    slug_doc = await ProductQueries.find_by_slug(slug, biz_id)
+                    if slug_doc and slug_doc["_id"] != prod_oid:
                         slug = make_unique_slug(base_slug)
-                else:
-                    slug = base_slug
                 update_data["slug"] = slug
 
-            updated = await ProductQueries.update(business_id, ObjectId(product_id), update_data)
-            if not updated:
-                ResponseService.status = CODE.RECORD_NOT_FOUND
-                return ResponseService.response_service(STATUS.NOT_FOUND, None, MESSAGES.PRODUCT_NOT_FOUND)
+            update_data["updated_at"] = datetime.now(timezone.utc)
+            updated = await ProductQueries.update(prod_oid, biz_id, update_data)
 
             ResponseService.status = CODE.OK
-            return ResponseService.response_service(STATUS.SUCCESS, _serialize_product(updated), MESSAGES.PRODUCT_UPDATED)
+            return ResponseService.response_service(
+                STATUS.SUCCESS,
+                {"product": _serialize_product(updated)},
+                MESSAGES.PRODUCT_UPDATED,
+            )
 
         except Exception as error:
             ResponseService.status = CODE.INTERNAL_SERVER_ERROR
-            return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)
+            return ResponseService.response_service(
+                STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION
+            )
 
-    async def delete_product(self, product_id: str, ctx: dict) -> dict:
+    async def delete_product(
+        self, product_id: str, business_context: dict
+    ) -> dict:
+        """
+        Delete a product and clean up its agent_config and qualification_flow.
+        Tenant-isolated.
+        """
         try:
-            business_id = ctx["business_id"]
-            product = await ProductQueries.find_by_id(business_id, ObjectId(product_id))
+            biz_id = business_context["business_id"]
+            prod_oid = ObjectId(product_id)
 
-            if not product:
+            existing = await ProductQueries.find_by_id(prod_oid, biz_id)
+            if not existing:
                 ResponseService.status = CODE.RECORD_NOT_FOUND
-                return ResponseService.response_service(STATUS.NOT_FOUND, None, MESSAGES.PRODUCT_NOT_FOUND)
+                return ResponseService.response_service(
+                    STATUS.NOT_FOUND, None, MESSAGES.PRODUCT_NOT_FOUND
+                )
 
-            await ProductQueries.delete(business_id, ObjectId(product_id))
+            # ── Clean up dependent resources ─────────────────────────
+            await AgentConfigQueries.delete_by_product(biz_id, prod_oid)
+            await QualificationQueries.delete_by_product(biz_id, prod_oid)
+
+            # ── Delete the product ───────────────────────────────────
+            await ProductQueries.delete(prod_oid, biz_id)
 
             ResponseService.status = CODE.OK
-            return ResponseService.response_service(STATUS.SUCCESS, None, MESSAGES.PRODUCT_DELETED)
+            return ResponseService.response_service(
+                STATUS.SUCCESS, None, MESSAGES.PRODUCT_DELETED
+            )
 
         except Exception as error:
             ResponseService.status = CODE.INTERNAL_SERVER_ERROR
-            return ResponseService.response_service(STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION)
+            return ResponseService.response_service(
+                STATUS.EXCEPTION, str(error), MESSAGES.EXCEPTION
+            )

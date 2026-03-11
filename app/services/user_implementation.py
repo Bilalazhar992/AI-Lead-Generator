@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 from jose import JWTError
-from passlib.context import CryptContext
 from app.config import settings
+from app.utils.password_helper import hash_password, verify_password
 from app.queries.user_queries import UserQueries
 from app.queries.refresh_token_queries import RefreshTokenQueries
 from app.queries.token_queries import TokenQueries
@@ -11,8 +11,6 @@ from app.utils.response_service import ResponseService
 from app.utils.constants import CODE, STATUS, ROLES, ROLE_DEFAULT_PERMISSIONS
 from app.utils.messages import MESSAGES
 from app.models.user_schemas import SignupRequest, SigninRequest, TokenRefreshRequest
-
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _serialize_user(user: dict) -> dict:
@@ -63,7 +61,7 @@ class UserImplementation:
             now = datetime.now(timezone.utc)
             user = await UserQueries.create_user({
                 "email": data.email,
-                "password_hash": _pwd_context.hash(data.password),
+                "password_hash": hash_password(data.password),
                 "first_name": data.first_name,
                 "last_name": data.last_name,
                 "role": ROLES.BUSINESS_OWNER,
@@ -97,7 +95,7 @@ class UserImplementation:
         try:
             user = await UserQueries.find_by_email(data.email)
 
-            if not user or not _pwd_context.verify(data.password, user["password_hash"]):
+            if not user or not verify_password(data.password, user["password_hash"]):
                 ResponseService.status = CODE.UNAUTHORIZED
                 return ResponseService.response_service(STATUS.UNAUTHORIZED, None, MESSAGES.INVALID_CREDENTIALS)
 

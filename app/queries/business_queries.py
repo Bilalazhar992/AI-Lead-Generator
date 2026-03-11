@@ -39,6 +39,11 @@ class BusinessQueries:
         return await BusinessQueries._col().find_one({"_id": business_id})
 
     @staticmethod
+    async def find_all() -> list[dict]:
+        cursor = BusinessQueries._col().find({})
+        return await cursor.to_list(length=None)
+
+    @staticmethod
     async def update_by_owner(business_id: ObjectId, owner_user_id: ObjectId, data: dict) -> dict | None:
         """
         Ownership-safe update: the MongoDB filter requires BOTH _id AND owner_user_id

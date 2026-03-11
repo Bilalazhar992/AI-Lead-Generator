@@ -56,3 +56,25 @@ class MESSAGES:
     PLAN_NOT_FOUND = 'Subscription plan not found'
     PLAN_SLUG_EXISTS = 'A subscription plan with this slug already exists'
 
+    # AI Templates
+    TEMPLATE_CREATED = 'AI template created successfully'
+    TEMPLATE_UPDATED = 'AI template updated successfully'
+    TEMPLATE_NOT_FOUND = 'AI template not found'
+    TEMPLATE_ID_EXISTS = 'An AI template with this template_id already exists'
+
+    # Agent Config
+    AGENT_CONFIG_SAVED = 'Agent configuration saved successfully'
+    AGENT_CONFIG_NOT_FOUND = 'Agent configuration not found for this product'
+
+    # Qualification Flows
+    QUALIFICATION_SAVED = 'Qualification flow saved successfully'
+    QUALIFICATION_NOT_FOUND = 'Qualification flow not found for this product'
+
+    # Products
+    PRODUCT_NOT_FOUND = 'Product not found'
+    PRODUCT_CREATED = 'Product created successfully'
+    PRODUCT_UPDATED = 'Product updated successfully'
+    PRODUCT_DELETED = 'Product and its configurations deleted successfully'
+    PRODUCT_SLUG_EXISTS = 'A product with this slug already exists in your business'
+    PRODUCT_LIMIT_REACHED = 'Your subscription plan product limit has been reached'
+
