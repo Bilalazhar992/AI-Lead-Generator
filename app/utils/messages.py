@@ -39,6 +39,16 @@ class MESSAGES:
     BUSINESS_REQUIRED = 'You must complete business onboarding before inviting staff'
     TEAM_LIMIT_REACHED = 'Your subscription plan team member limit has been reached'
 
+    # Products
+    PRODUCT_CREATED = 'Product created successfully'
+    PRODUCT_UPDATED = 'Product updated successfully'
+    PRODUCT_DELETED = 'Product deleted successfully'
+    PRODUCT_NOT_FOUND = 'Product not found'
+    PRODUCT_SLUG_EXISTS = 'A product with this slug already exists in your business'
+    PRODUCT_LIMIT_REACHED = 'Your subscription plan product limit has been reached'
+    PRODUCTS_FETCHED = 'Products retrieved successfully'
+    PRODUCT_FETCHED = 'Product retrieved successfully'
+
     # Subscription Plans
     PLAN_CREATED = 'Subscription plan created successfully'
     PLAN_UPDATED = 'Subscription plan updated successfully'
