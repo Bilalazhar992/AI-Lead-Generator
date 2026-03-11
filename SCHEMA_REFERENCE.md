@@ -391,22 +391,25 @@ Run as a single atomic session — archive first, then overwrite.
 ---
 
 ## `calendar_configs`
+
+> **Stores Calendly OAuth credentials and scheduling link per product.**
+> Only the fields required for OAuth token refresh and sharing the booking URL
+> with leads are kept. Display-only metadata (event type name) and webhook URIs
+> (managed on Calendly's side) are omitted for MVP.
+
 ```javascript
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   product_id: ObjectId,
   is_enabled: Boolean,
-  provider: Enum,                   // "calendly" | "google_calendar"
+  provider: Enum,                   // "calendly" (only provider for MVP)
   calendly_user_uri: String,
   calendly_event_type_uri: String,
-  calendly_event_type_name: String,
   calendly_scheduling_url: String,
   calendly_access_token: String,    // encrypted at rest
   calendly_refresh_token: String,   // encrypted at rest
   calendly_token_expires_at: Date,
-  calendly_webhook_uri: String,
   created_at: Date,
   updated_at: Date
 }
@@ -416,35 +419,24 @@ Run as a single atomic session — archive first, then overwrite.
 ---
 
 ## `whatsapp_channels`
+
+> **WhatsApp Business API connection per product.**
+> - `phone_number` = human-readable number, e.g. `"+923001234567"` — shown in UI.
+> - `phone_number_id` = Meta's internal ID, e.g. `"109876543210987"` — required by the
+>   Cloud API to send messages (`POST /{phone_number_id}/messages`).
+>
+> Both are needed — they serve different purposes.
+
 ```javascript
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   product_id: ObjectId,
-  phone_number: String,
-  phone_number_id: String,
-  waba_id: String,
-  display_name: String,
-  profile_picture_url: String,
-  about_text: String,
+  phone_number: String,             // e.g. "+923001234567" (human-readable)
+  phone_number_id: String,          // Meta's internal ID (used in API calls)
+  waba_id: String,                  // WhatsApp Business Account ID
   access_token: String,             // encrypted at rest
-  token_expires_at: Date,
-  verification_status: Enum,        // "pending" | "verified" | "failed"
   webhook_verify_token: String,
-  typing_delay_ms: Number,
-  business_hours_enabled: Boolean,
-  business_hours_timezone: String,
-  business_hours: {
-    monday:    { is_open: Boolean, open_time: String, close_time: String },
-    tuesday:   { is_open: Boolean, open_time: String, close_time: String },
-    wednesday: { is_open: Boolean, open_time: String, close_time: String },
-    thursday:  { is_open: Boolean, open_time: String, close_time: String },
-    friday:    { is_open: Boolean, open_time: String, close_time: String },
-    saturday:  { is_open: Boolean, open_time: String, close_time: String },
-    sunday:    { is_open: Boolean, open_time: String, close_time: String }
-  },
-  outside_hours_message: String,
   is_active: Boolean,
   created_at: Date,
   updated_at: Date
@@ -455,36 +447,21 @@ Run as a single atomic session — archive first, then overwrite.
 ---
 
 ## `widget_channels`
+
+> **Website chat widget configuration per product.**
+> Advanced UX features (auto-open, proactive messages, pre-chat forms, offline message)
+> are omitted for MVP. Position is hardcoded to `"bottom-right"`.
+
 ```javascript
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   product_id: ObjectId,
-  widget_id: String,
-  allowed_domains: [String],
-  position: Enum,                   // "bottom-right" | "bottom-left"
+  widget_id: String,                // unique embed identifier
+  allowed_domains: [String],        // CORS / embed security
   primary_color: String,
   header_text: String,
-  avatar_url: String,
-  show_branding: Boolean,
-  auto_open_enabled: Boolean,
-  auto_open_delay_seconds: Number,
-  proactive_enabled: Boolean,
-  proactive_message: String,
-  proactive_delay_seconds: Number,
-  prechat_enabled: Boolean,
-  prechat_fields: [
-    {
-      field_name: String,
-      field_label: String,
-      field_type: Enum,             // "text" | "email" | "tel"
-      is_required: Boolean
-    }
-  ],
   welcome_message: String,
-  offline_message: String,
-  input_placeholder: String,
   is_active: Boolean,
   created_at: Date,
   updated_at: Date
@@ -495,30 +472,38 @@ Run as a single atomic session — archive first, then overwrite.
 ---
 
 ## `knowledge_base`
+
+> **One document per knowledge source added to a product.**
+> A product may have many knowledge base entries (multiple PDFs, multiple FAQs,
+> one or more website URLs).
+>
+> For `source_type: "website"`, this document represents the **root website**.
+> `processing_status` tracks the **crawl/discovery** step (finding pages on the site).
+> Individual page scraping is tracked in `website_pages`.
+>
+> For `source_type: "pdf"` / `"faq"`, `processing_status` tracks text extraction
+> and embedding creation directly.
+
 ```javascript
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   product_id: ObjectId,
   source_type: Enum,                // "pdf" | "faq" | "website"
   title: String,
   is_active: Boolean,
+  // ── PDF-specific ───────────────────────
   pdf_file_url: String,
   pdf_file_name: String,
-  pdf_file_size_bytes: Number,
-  pdf_page_count: Number,
+  // ── FAQ-specific ───────────────────────
   faq_question: String,
   faq_answer: String,
-  website_url: String,
-  website_scraped_at: Date,
-  extracted_text: String,
+  // ── Website-specific ───────────────────
+  website_url: String,              // root URL, e.g. "https://example.com"
+  // ── Processing ─────────────────────────
   processing_status: Enum,          // "pending" | "processing" | "completed" | "failed"
   processing_error: String,
   processed_at: Date,
-  chunks_count: Number,
-  embeddings_created: Boolean,
-  tags: [String],
   created_by: ObjectId,             // ref → users._id
   created_at: Date,
   updated_at: Date
@@ -528,25 +513,70 @@ Run as a single atomic session — archive first, then overwrite.
 
 ---
 
-## `embeddings`
+## `website_pages`
+
+> **One document per discovered page for a `source_type: "website"` knowledge base entry.**
+>
+> **Lifecycle:**
+> 1. User adds a website URL → creates a `knowledge_base` doc (`source_type: "website"`).
+> 2. System crawls the site → discovers pages → creates `website_pages` docs with
+>    `status: "discovered"`.
+> 3. User selects pages to scrape → selected pages move to `status: "processing"`.
+> 4. System scrapes text, chunks, creates embeddings → page moves to `status: "completed"`.
+> 5. Pages with `status: "completed"` are never re-processed.
+> 6. User can return later and select more `"discovered"` pages.
+
 ```javascript
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   product_id: ObjectId,
-  knowledge_base_id: ObjectId,
+  knowledge_base_id: ObjectId,      // ref → knowledge_base._id (parent website entry)
+  page_url: String,                 // full URL, e.g. "https://example.com/about"
+  page_title: String,               // <title> tag from crawl discovery
+  status: Enum,                     // "discovered" | "processing" | "completed" | "failed"
+  scrape_error: String,             // error message if status === "failed"
+  scraped_at: Date,                 // when text was successfully extracted
+  created_at: Date,
+  updated_at: Date
+}
+```
+**Indexes:** `(business_id, knowledge_base_id)`, `(business_id, knowledge_base_id, page_url)` (compound unique)
+
+**Status reference:**
+| Status | Meaning |
+|---|---|
+| `discovered` | Crawl found this page — available for user to select |
+| `processing` | User selected it, scraping/chunking/embedding in progress |
+| `completed` | Scraped & embedded — will NOT be re-processed |
+| `failed` | Scraping failed — user can retry |
+
+---
+
+## `embeddings`
+
+> **Vector chunks for RAG retrieval.**
+> `website_page_id` is populated only when `source_type` of the parent knowledge base
+> entry is `"website"` — it links a chunk to the specific page it was scraped from,
+> allowing per-page deletion and re-processing.
+
+```javascript
+{
+  _id: ObjectId,
+  business_id: ObjectId,            // ★ TENANT KEY
+  product_id: ObjectId,
+  knowledge_base_id: ObjectId,      // ref → knowledge_base._id
+  website_page_id: ObjectId,        // ref → website_pages._id (null for pdf/faq sources)
   chunk_index: Number,
   chunk_text: String,
   embedding: [Number],              // 1536 floats (text-embedding-3-small)
-  source_type: Enum,                // "pdf" | "faq" | "website"
-  source_title: String,
   created_at: Date
 }
 ```
 **Indexes:**
 - Atlas Vector Search on `embedding` with `{ business_id, product_id }` pre-filter
 - `(business_id, product_id, knowledge_base_id)` (compound)
+- `(business_id, website_page_id)` (compound, sparse — for per-page deletion)
 
 ---
 
@@ -555,7 +585,6 @@ Run as a single atomic session — archive first, then overwrite.
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   product_id: ObjectId,
   first_name: String,
   last_name: String,
@@ -563,19 +592,10 @@ Run as a single atomic session — archive first, then overwrite.
   phone: String,
   whatsapp_phone: String,
   source_channel: Enum,             // "whatsapp" | "widget"
-  source_url: String,
-  source_utm_source: String,
-  source_utm_medium: String,
-  source_utm_campaign: String,
   qualification_score: Number,
   qualification_temperature: Enum,  // "hot" | "warm" | "cold"
   qualification_completed: Boolean,
-  extracted_budget: String,
-  extracted_interest: String,
-  extracted_timeline: String,
   stage: Enum,                      // "new" | "engaged" | "qualified" | "meeting_scheduled" | "converted" | "lost"
-  total_conversations: Number,
-  total_messages: Number,
   first_contact_at: Date,
   last_contact_at: Date,
   ai_summary: String,
@@ -598,7 +618,6 @@ Run as a single atomic session — archive first, then overwrite.
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   lead_id: ObjectId,
   product_id: ObjectId,
   qualification_flow_id: ObjectId,
@@ -607,17 +626,13 @@ Run as a single atomic session — archive first, then overwrite.
       question_id: String,
       question_text: String,
       answer_raw: String,
-      answer_mapped: String,
       score_earned: Number,
       answered_at: Date
     }
   ],
   total_score: Number,
   max_possible_score: Number,
-  score_percentage: Number,
   temperature: Enum,                // "hot" | "warm" | "cold"
-  questions_asked: Number,
-  questions_total: Number,
   is_complete: Boolean,
   created_at: Date,
   updated_at: Date
@@ -632,26 +647,14 @@ Run as a single atomic session — archive first, then overwrite.
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   product_id: ObjectId,
   lead_id: ObjectId,
   channel: Enum,                    // "whatsapp" | "widget"
   status: Enum,                     // "active" | "closed"
   closed_reason: Enum,              // "completed" | "timeout" | "human_takeover"
-  message_count: Number,
-  ai_message_count: Number,
-  human_message_count: Number,
-  lead_message_count: Number,
-  sentiment_score: Number,
-  detected_intent: Enum,            // "booking" | "inquiry" | "support" | "complaint"
+  message_count: Number,            // total messages (simple counter, avoids count queries)
   summary: String,
   human_takeover: Boolean,
-  human_takeover_by: ObjectId,
-  human_takeover_at: Date,
-  human_takeover_reason: String,
-  session_page_url: String,
-  session_device: String,
-  session_browser: String,
   started_at: Date,
   last_message_at: Date,
   closed_at: Date,
@@ -663,35 +666,34 @@ Run as a single atomic session — archive first, then overwrite.
 ---
 
 ## `ai_sessions`
+
+> **Sliding-window AI context per conversation.**
+> Tracks the recent message window, running summary, qualification progress,
+> and current conversational goal for the AI agent.
+
 ```javascript
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   conversation_id: ObjectId,
   lead_id: ObjectId,
   product_id: ObjectId,
   message_window: [
     {
-      role: Enum,                   // "user" | "assistant" | "tool"
+      role: Enum,                   // "user" | "assistant"
       content: String,
-      tool_call_id: String,
       timestamp: Date
     }
   ],
-  message_window_size: Number,
   running_summary: String,
-  summary_covers_message_count: Number,
   questions_answered: [String],
   questions_remaining: [String],
   current_total_score: Number,
   qualification_complete: Boolean,
   current_goal: Enum,               // "greet" | "qualify" | "answer_faq" | "push_booking" | "completed"
   total_tokens_used: Number,
-  last_turn_tokens: Number,
   handoff_triggered: Boolean,
   handoff_reason: Enum,             // "keyword_detected" | "message_count_exceeded" | "manual"
-  consecutive_messages_without_conversion: Number,
   created_at: Date,
   updated_at: Date
 }
@@ -705,32 +707,11 @@ Run as a single atomic session — archive first, then overwrite.
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   conversation_id: ObjectId,
-  sender_type: Enum,                // "lead" | "ai" | "human"
-  sender_user_id: ObjectId,
-  content_type: Enum,               // "text" | "image" | "document" | "audio"
+  sender_type: Enum,                // "lead" | "ai"
+  content_type: Enum,               // "text" (MVP only)
   text: String,
-  media_url: String,
-  media_type: String,
-  media_filename: String,
-  ai_model: String,
-  ai_tokens_prompt: Number,
-  ai_tokens_completion: Number,
-  ai_tokens_total: Number,
-  ai_response_time_ms: Number,
-  ai_used_rag: Boolean,
-  ai_rag_sources: [ObjectId],
-  ai_function_calls: [
-    {
-      function_name: String,
-      arguments: Object,
-      executed_at: Date
-    }
-  ],
-  external_message_id: String,
-  delivery_status: Enum,            // "sent" | "delivered" | "read" | "failed"
-  delivery_status_at: Date,
+  external_message_id: String,      // WhatsApp message ID for dedup
   created_at: Date
 }
 ```
@@ -740,39 +721,24 @@ Run as a single atomic session — archive first, then overwrite.
 
 ## `meetings`
 
-> **One meeting document per conversation** — enforced by the unique index on
-> `(business_id, conversation_id)`. If a lead cancels and rebooks within the same
-> conversation, the existing document is **updated** and `rescheduled_count` is incremented.
+> **One meeting document per booking.** Tracks only the essential scheduling data
+> from Calendly webhooks and the current status.
 
 ```javascript
 {
   _id: ObjectId,
   business_id: ObjectId,            // ★ TENANT KEY
-  business_slug: String,
   product_id: ObjectId,
   lead_id: ObjectId,
   conversation_id: ObjectId,
-  title: String,
-  description: String,
   scheduled_at: Date,
-  duration_minutes: Number,
-  timezone: String,
   provider: Enum,                   // "calendly"
   external_event_id: String,
-  external_event_uri: String,
   meeting_link: String,
   lead_name: String,
   lead_email: String,
-  lead_phone: String,
-  host_name: String,
-  host_email: String,
   status: Enum,                     // "scheduled" | "completed" | "cancelled" | "no_show"
-  rescheduled_count: Number,
-  cancelled_by: Enum,               // "lead" | "host"
   cancelled_at: Date,
-  cancelled_reason: String,
-  outcome: Enum,                    // "converted" | "follow_up" | "not_interested" | "no_outcome"
-  outcome_notes: String,
   created_at: Date,
   updated_at: Date
 }
@@ -795,25 +761,26 @@ Run as a single atomic session — archive first, then overwrite.
 | `subscription_history` | Billing audit trail |
 | `routing_rules` | Channel → product routing |
 
-## Business Collections — Shared (14)
-| Collection | Tenant Key | Was |
-|---|---|---|
-| `products` | `business_id` | `{slug}_products` |
-| `agent_configs` | `business_id` | `{slug}_agent_configs` |
-| `qualification_flows` | `business_id` | `{slug}_qualification_flows` |
-| `calendar_configs` | `business_id` | `{slug}_calendar_configs` |
-| `whatsapp_channels` | `business_id` | `{slug}_whatsapp_channels` |
-| `widget_channels` | `business_id` | `{slug}_widget_channels` |
-| `knowledge_base` | `business_id` | `{slug}_knowledge_base` |
-| `embeddings` | `business_id` | `{slug}_embeddings` |
-| `leads` | `business_id` | `{slug}_leads` |
-| `lead_qualifications` | `business_id` | `{slug}_lead_qualifications` |
-| `conversations` | `business_id` | `{slug}_conversations` |
-| `ai_sessions` | `business_id` | `{slug}_ai_sessions` |
-| `messages` | `business_id` | `{slug}_messages` |
-| `meetings` | `business_id` | `{slug}_meetings` |
+## Business Collections — Shared (15)
+| Collection | Tenant Key |
+|---|---|
+| `products` | `business_id` |
+| `agent_configs` | `business_id` |
+| `qualification_flows` | `business_id` |
+| `calendar_configs` | `business_id` |
+| `whatsapp_channels` | `business_id` |
+| `widget_channels` | `business_id` |
+| `knowledge_base` | `business_id` |
+| `website_pages` | `business_id` |
+| `embeddings` | `business_id` |
+| `leads` | `business_id` |
+| `lead_qualifications` | `business_id` |
+| `conversations` | `business_id` |
+| `ai_sessions` | `business_id` |
+| `messages` | `business_id` |
+| `meetings` | `business_id` |
 
-**Total: 22 collections — fixed, regardless of how many businesses onboard.**
+**Total: 23 collections — fixed, regardless of how many businesses onboard.**
 
 ---
 
@@ -829,12 +796,7 @@ Run as a single atomic session — archive first, then overwrite.
 3. **Never return cross-tenant data.** Service-layer unit tests must assert that queries
    for tenant A never return documents belonging to tenant B.
 
-4. **business_slug is denormalized, not authoritative.** It is stored for human-readable
-   logging and convenience. The source of truth for tenant identity is always `business_id`
-   (ObjectId). Slug changes to a business must also update `business_slug` in all
-   business collections via a migration.
-
-5. **Deletion is clean.** To fully remove a tenant, run a single
-   `deleteMany({ business_id: <id> })` on each of the 14 business collections plus
+4. **Deletion is clean.** To fully remove a tenant, run a single
+   `deleteMany({ business_id: <id> })` on each of the 15 business collections plus
    delete the `businesses`, `subscriptions`, `subscription_history`, and `routing_rules`
    documents. No collection drops needed.
